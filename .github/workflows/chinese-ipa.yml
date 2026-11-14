@@ -1,0 +1,62 @@
+name: 构建汉化版 SideStore IPA
+
+# 触发方式：可手动运行，也可在推送到主分支时自动运行
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - master
+    paths-ignore:
+      - '**.md'
+      - 'LICENSE'
+
+concurrency:
+  group: chinese-ipa-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: 打包 SideStore.ipa
+    runs-on: macos-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: 检出代码（含子模块）
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 1
+
+      - name: 安装 ldid（伪签名工具）
+        run: |
+          brew install ldid
+
+      - name: 显示构建环境版本
+        run: |
+          xcodebuild -version
+          swift --version
+          xcode-select -p
+
+      - name: 构建（免签名 archive）
+        run: make build
+
+      - name: ldid 伪签名
+        run: make fakesign
+
+      - name: 打包 IPA
+        run: make ipa
+
+      - name: 确认产物
+        run: |
+          ls -lh SideStore.ipa
+          file SideStore.ipa
+          unzip -l SideStore.ipa | head -20
+
+      - name: 上传 IPA 构建产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: SideStore-zh-Hans.ipa
+          path: SideStore.ipa
+          retention-days: 30
+          if-no-files-found: error
